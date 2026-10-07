@@ -76,6 +76,7 @@ final class EdgeRailController: ObservableObject {
     /// RailItem.id of the session whose title is being edited.
     @Published private(set) var renamingID: String?
     @Published var showArchive = false
+    @Published private(set) var isDragging = false
 
     private var isTextInputActive: Bool { isAdding || renamingID != nil }
 
@@ -88,6 +89,7 @@ final class EdgeRailController: ObservableObject {
     private var collapseWork: DispatchWorkItem?
     private var isMenuOpen = false
     private var previousApp: NSRunningApplication?
+    private var dragStart: (mouse: NSPoint, origin: NSPoint)?
     private var cancellables = Set<AnyCancellable>()
 
     init(store: Store) {
@@ -101,7 +103,7 @@ final class EdgeRailController: ObservableObject {
 
         // Edge/position changes move the panel.
         store.$data
-            .map { ($0.edge, $0.position) }
+            .map { ($0.edge, $0.position, $0.alongEdge, $0.screenID) }
             .removeDuplicates(by: ==)
             .sink { [weak self] _ in DispatchQueue.main.async { self?.relayout() } }
             .store(in: &cancellables)
@@ -147,7 +149,8 @@ final class EdgeRailController: ObservableObject {
     private func scheduleCollapse() {
         collapseWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.isExpanded, !self.isTextInputActive, !self.isMenuOpen, !self.isMouseInside else { return }
+            guard let self, self.isExpanded, !self.isTextInputActive, !self.isMenuOpen, !self.isDragging,
+                  !self.isMouseInside else { return }
             self.isExpanded = false
             self.showArchive = false
         }
@@ -204,6 +207,59 @@ final class EdgeRailController: ObservableObject {
         settings.show(store: store)
     }
 
+    // MARK: Dragging
+
+    /// Called for every mouse move while the title bar is dragged: the panel follows the mouse freely.
+    func dragChanged() {
+        let mouse = NSEvent.mouseLocation
+        if dragStart == nil {
+            dragStart = (mouse, panel.frame.origin)
+            isDragging = true
+            collapseWork?.cancel()
+        }
+        guard let start = dragStart else { return }
+        panel.setFrameOrigin(NSPoint(x: start.origin.x + mouse.x - start.mouse.x,
+                                     y: start.origin.y + mouse.y - start.mouse.y))
+    }
+
+    /// Snaps the panel to the screen edge nearest to its center, at the spot where it was dropped.
+    func dragEnded() {
+        dragStart = nil
+        isDragging = false
+
+        let center = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(center) })
+            ?? NSScreen.screens.min(by: { distance($0.frame, center) < distance($1.frame, center) })
+        else { return }
+        let vf = screen.visibleFrame
+
+        let distances: [(ScreenEdge, CGFloat)] = [
+            (.left, center.x - vf.minX),
+            (.right, vf.maxX - center.x),
+            (.top, vf.maxY - center.y),
+            (.bottom, center.y - vf.minY),
+        ]
+        let edge = distances.min { $0.1 < $1.1 }!.0
+        let fraction = edge.isVertical
+            ? (vf.maxY - center.y) / vf.height
+            : (center.x - vf.minX) / vf.width
+
+        var data = store.data
+        data.edge = edge
+        data.alongEdge = min(max(Double(fraction), 0), 1)
+        data.screenID = screen.displayID
+        store.data = data
+
+        relayout(animated: true)
+        scheduleCollapse()
+    }
+
+    private func distance(_ rect: NSRect, _ p: NSPoint) -> CGFloat {
+        let dx = max(rect.minX - p.x, 0, p.x - rect.maxX)
+        let dy = max(rect.minY - p.y, 0, p.y - rect.maxY)
+        return hypot(dx, dy)
+    }
+
     // MARK: Layout
 
     func contentSizeDidChange(_ size: CGSize) {
@@ -213,8 +269,10 @@ final class EdgeRailController: ObservableObject {
         }
     }
 
-    private func relayout() {
-        guard let screen = NSScreen.screens.first else { return }
+    private func relayout(animated: Bool = false) {
+        guard !isDragging else { return }
+        let screens = NSScreen.screens
+        guard let screen = screens.first(where: { $0.displayID == store.data.screenID }) ?? screens.first else { return }
         let vf = screen.visibleFrame
         let size = CGSize(width: ceil(contentSize.width), height: ceil(contentSize.height))
         let margin: CGFloat = 40
@@ -224,17 +282,27 @@ final class EdgeRailController: ObservableObject {
         var origin = CGPoint.zero
         if edge.isVertical {
             origin.x = edge == .left ? vf.minX : vf.maxX - size.width
-            switch position {
-            case .start: origin.y = vf.maxY - margin - size.height
-            case .center: origin.y = vf.midY - size.height / 2
-            case .end: origin.y = vf.minY + margin
+            if let along = store.data.alongEdge {
+                let centerY = vf.maxY - CGFloat(along) * vf.height
+                origin.y = min(max(centerY - size.height / 2, vf.minY), vf.maxY - size.height)
+            } else {
+                switch position {
+                case .start: origin.y = vf.maxY - margin - size.height
+                case .center: origin.y = vf.midY - size.height / 2
+                case .end: origin.y = vf.minY + margin
+                }
             }
         } else {
             origin.y = edge == .top ? vf.maxY - size.height : vf.minY
-            switch position {
-            case .start: origin.x = vf.minX + margin
-            case .center: origin.x = vf.midX - size.width / 2
-            case .end: origin.x = vf.maxX - margin - size.width
+            if let along = store.data.alongEdge {
+                let centerX = vf.minX + CGFloat(along) * vf.width
+                origin.x = min(max(centerX - size.width / 2, vf.minX), vf.maxX - size.width)
+            } else {
+                switch position {
+                case .start: origin.x = vf.minX + margin
+                case .center: origin.x = vf.midX - size.width / 2
+                case .end: origin.x = vf.maxX - margin - size.width
+                }
             }
         }
         origin.x = origin.x.rounded()
@@ -242,8 +310,14 @@ final class EdgeRailController: ObservableObject {
 
         let frame = NSRect(origin: origin, size: size)
         guard panel.frame != frame else { return }
-        panel.setFrame(frame, display: true)
+        panel.setFrame(frame, display: true, animate: animated)
         panel.invalidateShadow()
+    }
+}
+
+extension NSScreen {
+    var displayID: UInt32? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 }
 

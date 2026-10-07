@@ -7,6 +7,7 @@ Kleine macOS-Leiste am Bildschirmrand, die zeigt, wie viele KI-Agent-Sessions ge
 - **Hover über einer Zeile:** ✏️ umbenennen (oder Doppelklick auf den Titel), 🗄 archivieren, 🗑 löschen.
 - **🗄 im Kopf** blendet das Archiv ein, ebenfalls nach letzter Aktivität sortiert. Dort holt ⤴ eine Session zurück.
 - **+** trägt eine Session manuell ein: Titel tippen, Assistent per Farbpunkt wählen, ⏎. Esc bricht ab.
+- **Titelleiste (≡) ziehen** verschiebt die Leiste frei. Beim Loslassen rastet sie am nächstgelegenen Bildschirmrand ein, an der Stelle, wo du sie losgelassen hast, auch auf einem anderen Bildschirm.
 - **Rechtsklick** oder **…** öffnet das Menü: automatische Erkennung an/aus, Auto-Archiv-Dauer, Bildschirmrand, Position, Assistenten bearbeiten, Start beim Anmelden, Beenden.
 
 Die Leiste ist auf allen Spaces und über Vollbild-Apps sichtbar und nimmt anderen Apps nicht den Fokus weg.

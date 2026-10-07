@@ -95,10 +95,25 @@ struct ExpandedList: View {
 
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
-                Text(headerText(active.count))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
+                // Title bar: drag to move the rail to any screen edge.
+                HStack(spacing: 6) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                    Text(headerText(active.count))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+                .grabCursor()
+                .help("Ziehen, um die Leiste an einen anderen Bildschirmrand zu verschieben")
+                .gesture(
+                    DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                        .onChanged { _ in rail.dragChanged() }
+                        .onEnded { _ in rail.dragEnded() }
+                )
+
                 Button {
                     rail.showArchive.toggle()
                 } label: {
@@ -125,6 +140,11 @@ struct ExpandedList: View {
                 .fixedSize()
             }
             .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color.primary.opacity(rail.isDragging ? 0.08 : 0.035))
+            )
             .padding(.bottom, 3)
 
             ForEach(active) { item in
@@ -369,8 +389,15 @@ struct RailMenuItems: View {
         Picker("Bildschirmrand", selection: $store.data.edge) {
             ForEach(ScreenEdge.allCases) { Text($0.label).tag($0) }
         }
-        Picker("Position", selection: $store.data.position) {
-            ForEach(EdgePosition.allCases) { Text($0.label(for: store.data.edge)).tag($0) }
+        Picker("Position", selection: Binding(
+            get: { store.data.alongEdge == nil ? store.data.position : nil },
+            set: { newValue in
+                guard let newValue else { return }
+                store.data.position = newValue
+                store.data.alongEdge = nil
+            }
+        )) {
+            ForEach(EdgePosition.allCases) { Text($0.label(for: store.data.edge)).tag(Optional($0)) }
         }
         Divider()
         Toggle("Sessions automatisch erkennen", isOn: $store.data.autoDetect)
@@ -409,6 +436,18 @@ struct RailMenuItems: View {
 }
 
 // MARK: Helpers
+
+extension View {
+    /// Open-hand cursor where supported (macOS 15+).
+    @ViewBuilder
+    func grabCursor() -> some View {
+        if #available(macOS 15, *) {
+            pointerStyle(.grabIdle)
+        } else {
+            self
+        }
+    }
+}
 
 struct VisualEffectBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {

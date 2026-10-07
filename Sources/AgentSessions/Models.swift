@@ -106,6 +106,12 @@ struct AutoSessionState: Codable, Hashable {
 struct AppData: Codable {
     var edge: ScreenEdge = .right
     var position: EdgePosition = .center
+    /// Set by dragging: where the rail's center sits along the edge, 0…1
+    /// (from the top on left/right edges, from the left on top/bottom edges).
+    /// Overrides `position` while set.
+    var alongEdge: Double?
+    /// CGDirectDisplayID of the screen the rail was dragged to; nil = main screen.
+    var screenID: UInt32?
     var assistants: [Assistant] = Assistant.defaults
     var sessions: [Session] = []
     var autoDetect = true
@@ -120,6 +126,8 @@ struct AppData: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         edge = (try? c.decodeIfPresent(ScreenEdge.self, forKey: .edge)) ?? .right
         position = (try? c.decodeIfPresent(EdgePosition.self, forKey: .position)) ?? .center
+        alongEdge = try? c.decodeIfPresent(Double.self, forKey: .alongEdge)
+        screenID = try? c.decodeIfPresent(UInt32.self, forKey: .screenID)
         assistants = try c.decodeIfPresent([Assistant].self, forKey: .assistants) ?? Assistant.defaults
         sessions = try c.decodeIfPresent([Session].self, forKey: .sessions) ?? []
         autoDetect = (try? c.decodeIfPresent(Bool.self, forKey: .autoDetect)) ?? true
