@@ -17,6 +17,8 @@ Reine Chats in den Desktop-Apps von Claude und ChatGPT werden bewusst nicht erfa
 
 ## Installation
 
+**Nur für macOS.** Die App nutzt SwiftUI und AppKit, die es nur auf macOS gibt. Unter Windows oder Linux lässt sie sich nicht übersetzen, auch wenn Swift dort verfügbar ist.
+
 **Voraussetzungen:** macOS 14 (Sonoma) oder neuer sowie Xcode oder die Command Line Tools von Apple. Ob Swift vorhanden ist, prüfst du mit `swift --version`. Falls nicht, installierst du die Command Line Tools mit:
 
 ```bash
@@ -26,8 +28,8 @@ xcode-select --install
 **Bauen und installieren:**
 
 ```bash
-git clone <URL dieses Repositorys> agent-sessions
-cd agent-sessions
+git clone https://github.com/ralfw-vibe-coding/AI-Agent-Session-Dashboard.git
+cd AI-Agent-Session-Dashboard
 ./scripts/build-app.sh --install
 ```
 
