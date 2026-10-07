@@ -51,18 +51,22 @@ struct Assistant: Codable, Identifiable, Hashable {
     static let unknown = Assistant(id: "?", name: "Unbekannt", color: "#8E8E93")
 }
 
+/// A session the user entered by hand. Only the user changes it.
 struct Session: Codable, Identifiable, Hashable {
     var id: String
     var title: String
     /// Assistant id, e.g. "claude-code".
     var assistant: String
     var createdAt: Date
+    var lastActivityAt: Date
+    var archivedAt: Date?
 
     init(id: String = UUID().uuidString, title: String, assistant: String, createdAt: Date = Date()) {
         self.id = id
         self.title = title
         self.assistant = assistant
         self.createdAt = createdAt
+        self.lastActivityAt = createdAt
     }
 
     // Lenient decoding so the JSON file can be written by hand or by scripts.
@@ -72,6 +76,30 @@ struct Session: Codable, Identifiable, Hashable {
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         assistant = try c.decodeIfPresent(String.self, forKey: .assistant) ?? "other"
         createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
+        lastActivityAt = (try? c.decodeIfPresent(Date.self, forKey: .lastActivityAt)) ?? createdAt
+        archivedAt = try? c.decodeIfPresent(Date.self, forKey: .archivedAt)
+    }
+}
+
+/// What the user did with an automatically detected session.
+struct AutoSessionState: Codable, Hashable {
+    /// Title chosen by the user; overrides the assistant's title.
+    var title: String?
+    /// Archived by the user. The session comes back with any activity after this moment.
+    var archivedAt: Date?
+    /// Unarchived by the user; counts as activity.
+    var unarchivedAt: Date?
+    /// Deleted by the user: never show again.
+    var deleted = false
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try? c.decodeIfPresent(String.self, forKey: .title)
+        archivedAt = try? c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        unarchivedAt = try? c.decodeIfPresent(Date.self, forKey: .unarchivedAt)
+        deleted = (try? c.decodeIfPresent(Bool.self, forKey: .deleted)) ?? false
     }
 }
 
@@ -80,6 +108,11 @@ struct AppData: Codable {
     var position: EdgePosition = .center
     var assistants: [Assistant] = Assistant.defaults
     var sessions: [Session] = []
+    var autoDetect = true
+    /// Detected sessions without activity for this long drop into the archive.
+    var autoArchiveHours: Double = 4
+    /// Keyed by DetectedSession.key.
+    var autoStates: [String: AutoSessionState] = [:]
 
     init() {}
 
@@ -89,6 +122,43 @@ struct AppData: Codable {
         position = (try? c.decodeIfPresent(EdgePosition.self, forKey: .position)) ?? .center
         assistants = try c.decodeIfPresent([Assistant].self, forKey: .assistants) ?? Assistant.defaults
         sessions = try c.decodeIfPresent([Session].self, forKey: .sessions) ?? []
+        autoDetect = (try? c.decodeIfPresent(Bool.self, forKey: .autoDetect)) ?? true
+        autoArchiveHours = (try? c.decodeIfPresent(Double.self, forKey: .autoArchiveHours)) ?? 4
+        autoStates = (try? c.decodeIfPresent([String: AutoSessionState].self, forKey: .autoStates)) ?? [:]
+    }
+}
+
+/// A session found in an assistant's local files.
+struct DetectedSession: Hashable {
+    /// "<source>:<session id>", stable across scans.
+    let key: String
+    let assistant: String
+    let title: String
+    let lastActivity: Date
+    /// Archived inside the assistant itself.
+    let archived: Bool
+    /// Working folder, shown in the tooltip.
+    let detail: String?
+}
+
+/// One line in the rail: a manual or a detected session, ready to display.
+struct RailItem: Identifiable, Hashable {
+    enum Kind { case manual, auto }
+
+    let id: String
+    let kind: Kind
+    let title: String
+    let assistant: String
+    let lastActivity: Date
+    let detail: String?
+    let archivedInSource: Bool
+
+    var kindSymbol: String {
+        kind == .manual ? "hand.raised.fill" : "dot.radiowaves.left.and.right"
+    }
+
+    var kindLabel: String {
+        kind == .manual ? "Manuell eingetragen" : "Automatisch erkannt"
     }
 }
 

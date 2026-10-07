@@ -46,17 +46,17 @@ struct CollapsedBadge: View {
     private let maxDots = 12
 
     var body: some View {
-        let sessions = store.sortedSessions
-        let count = Text("\(sessions.count)")
+        let active = store.items().active
+        let count = Text("\(active.count)")
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(sessions.isEmpty ? .tertiary : .primary)
+            .foregroundStyle(active.isEmpty ? .tertiary : .primary)
 
         if store.data.edge.isVertical {
             VStack(spacing: 6) {
                 count
-                if !sessions.isEmpty {
-                    VStack(spacing: 3) { dots(sessions) }
+                if !active.isEmpty {
+                    VStack(spacing: 3) { dots(active) }
                 }
             }
             .padding(.vertical, 8)
@@ -64,8 +64,8 @@ struct CollapsedBadge: View {
         } else {
             HStack(spacing: 6) {
                 count
-                if !sessions.isEmpty {
-                    HStack(spacing: 3) { dots(sessions) }
+                if !active.isEmpty {
+                    HStack(spacing: 3) { dots(active) }
                 }
             }
             .padding(.horizontal, 10)
@@ -74,10 +74,10 @@ struct CollapsedBadge: View {
     }
 
     @ViewBuilder
-    private func dots(_ sessions: [Session]) -> some View {
-        ForEach(sessions.prefix(maxDots)) { s in
+    private func dots(_ items: [RailItem]) -> some View {
+        ForEach(items.prefix(maxDots)) { item in
             Circle()
-                .fill(Color(hex: store.assistant(id: s.assistant).color))
+                .fill(Color(hex: store.assistant(id: item.assistant).color))
                 .frame(width: 6, height: 6)
         }
     }
@@ -88,23 +88,32 @@ struct CollapsedBadge: View {
 struct ExpandedList: View {
     @ObservedObject var store: Store
     @ObservedObject var rail: EdgeRailController
+    private let maxArchived = 20
 
     var body: some View {
-        let sessions = store.sortedSessions
+        let (active, archived) = store.items()
 
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
-                Text(headerText(sessions.count))
+                Text(headerText(active.count))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button {
+                    rail.showArchive.toggle()
+                } label: {
+                    Image(systemName: rail.showArchive ? "archivebox.fill" : "archivebox")
+                }
+                .buttonStyle(.borderless)
+                .help(rail.showArchive ? "Archiv ausblenden" : "Archiv zeigen (\(archived.count))")
+
                 Button {
                     rail.isAdding ? rail.endAdding() : rail.beginAdding()
                 } label: {
                     Image(systemName: rail.isAdding ? "xmark" : "plus")
                 }
                 .buttonStyle(.borderless)
-                .help(rail.isAdding ? "Abbrechen" : "Neue Session")
+                .help(rail.isAdding ? "Abbrechen" : "Session manuell eintragen")
 
                 Menu {
                     RailMenuItems(store: store, rail: rail)
@@ -118,23 +127,46 @@ struct ExpandedList: View {
             .padding(.horizontal, 6)
             .padding(.bottom, 3)
 
-            ForEach(sessions) { session in
-                SessionRow(session: session, assistant: store.assistant(id: session.assistant)) {
-                    store.removeSession(id: session.id)
-                }
+            ForEach(active) { item in
+                ItemRow(item: item, isArchived: false, store: store, rail: rail)
             }
 
             if rail.isAdding {
                 AddSessionForm(store: store) { rail.endAdding() }
-            } else if sessions.isEmpty {
-                Text("Mit + eine Session hinzufügen")
+            } else if active.isEmpty {
+                Text("Keine aktiven Sessions. Mit + manuell eintragen.")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                     .padding(6)
             }
+
+            if rail.showArchive {
+                Divider().padding(.vertical, 4)
+                Text("Archiv")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 2)
+                if archived.isEmpty {
+                    Text("Leer")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .padding(6)
+                }
+                ForEach(archived.prefix(maxArchived)) { item in
+                    ItemRow(item: item, isArchived: true, store: store, rail: rail)
+                }
+                if archived.count > maxArchived {
+                    Text("+ \(archived.count - maxArchived) ältere")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.top, 2)
+                }
+            }
         }
         .padding(6)
-        .frame(width: 250)
+        .frame(width: 270)
     }
 
     private func headerText(_ n: Int) -> String {
@@ -146,50 +178,121 @@ struct ExpandedList: View {
     }
 }
 
-struct SessionRow: View {
-    let session: Session
-    let assistant: Assistant
-    let onDelete: () -> Void
+struct ItemRow: View {
+    let item: RailItem
+    let isArchived: Bool
+    @ObservedObject var store: Store
+    @ObservedObject var rail: EdgeRailController
     @State private var hovering = false
 
     var body: some View {
+        let assistant = store.assistant(id: item.assistant)
         let color = Color(hex: assistant.color)
+        let isRenaming = rail.renamingID == item.id
 
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Capsule()
                 .fill(color)
                 .frame(width: 3, height: 14)
-            Text(session.title.isEmpty ? "Ohne Titel" : session.title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 6)
-            if hovering {
-                Button(action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
+            Image(systemName: item.kindSymbol)
+                .font(.system(size: 8))
+                .foregroundStyle(.tertiary)
+                .frame(width: 11)
+                .help(item.kindLabel)
+
+            if isRenaming {
+                RenameField(initial: item.title) { newTitle in
+                    if let newTitle { store.rename(item, to: newTitle) }
+                    rail.endRename()
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Session entfernen")
             } else {
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text(shortAge(from: session.createdAt, to: context.date))
-                        .font(.system(size: 10))
-                        .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                Text(item.title.isEmpty ? "Ohne Titel" : item.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .onTapGesture(count: 2) { rail.beginRename(item.id) }
+                Spacer(minLength: 6)
+
+                if hovering {
+                    actions
+                } else {
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        Text(shortAge(from: item.lastActivity, to: context.date))
+                            .font(.system(size: 10))
+                            .monospacedDigit()
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
         }
         .frame(height: 20)
         .padding(.horizontal, 6)
+        .opacity(isArchived && !hovering ? 0.65 : 1)
         .background(
             RoundedRectangle(cornerRadius: 5)
-                .fill(Color.primary.opacity(hovering ? 0.07 : 0))
+                .fill(Color.primary.opacity(hovering && !isRenaming ? 0.07 : 0))
         )
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .help("\(assistant.name) · seit \(session.createdAt.formatted(date: .abbreviated, time: .shortened))")
+        .help(tooltip(assistant))
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        HStack(spacing: 6) {
+            iconButton("pencil", help: "Umbenennen (oder Doppelklick auf den Titel)") {
+                rail.beginRename(item.id)
+            }
+            if isArchived {
+                if !item.archivedInSource {
+                    iconButton("tray.and.arrow.up", help: "Wieder aktiv") { store.unarchive(item) }
+                }
+            } else {
+                iconButton("archivebox", help: "Archivieren – kommt bei neuer Aktivität zurück") { store.archive(item) }
+            }
+            iconButton("trash", help: item.kind == .auto ? "Löschen – taucht nie wieder auf" : "Löschen") {
+                store.delete(item)
+            }
+        }
+    }
+
+    private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 10))
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(help)
+    }
+
+    private func tooltip(_ assistant: Assistant) -> String {
+        var lines = ["\(assistant.name) · \(item.kindLabel.lowercased())"]
+        if let detail = item.detail { lines.append(detail) }
+        lines.append("Letzte Aktivität: \(item.lastActivity.formatted(date: .abbreviated, time: .shortened))")
+        if item.archivedInSource { lines.append("Im Assistenten archiviert") }
+        return lines.joined(separator: "\n")
+    }
+}
+
+struct RenameField: View {
+    let initial: String
+    /// nil = cancelled
+    let onDone: (String?) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("Titel", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 12))
+            .focused($focused)
+            .onSubmit { onDone(text) }
+            .onExitCommand { onDone(nil) }
+            .onAppear {
+                text = initial
+                DispatchQueue.main.async { focused = true }
+            }
     }
 }
 
@@ -269,6 +372,12 @@ struct RailMenuItems: View {
         Picker("Position", selection: $store.data.position) {
             ForEach(EdgePosition.allCases) { Text($0.label(for: store.data.edge)).tag($0) }
         }
+        Divider()
+        Toggle("Sessions automatisch erkennen", isOn: $store.data.autoDetect)
+        Picker("Automatisch archivieren nach", selection: $store.data.autoArchiveHours) {
+            ForEach([1.0, 2, 4, 8, 24], id: \.self) { Text("\(Int($0)) Std. Inaktivität").tag($0) }
+        }
+        .disabled(!store.data.autoDetect)
         Divider()
         Button("Assistenten bearbeiten…") { rail.openSettings() }
         Toggle("Beim Anmelden starten", isOn: Binding(

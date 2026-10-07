@@ -39,6 +39,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// Diagnostics: `AgentSessions --scan` lists what the scanner finds and exits.
+if CommandLine.arguments.contains("--scan") {
+    let found = SessionScanner { _ in }.collect().sorted { $0.lastActivity > $1.lastActivity }
+    for s in found {
+        let age = shortAge(from: s.lastActivity, to: Date())
+        print("\(age.padding(toLength: 6, withPad: " ", startingAt: 0)) \(s.archived ? "A" : " ") \(s.assistant.padding(toLength: 14, withPad: " ", startingAt: 0)) \(s.title)")
+    }
+    print("\(found.count) Sessions")
+    exit(0)
+}
+
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     let delegate = AppDelegate()

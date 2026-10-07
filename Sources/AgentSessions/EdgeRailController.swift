@@ -73,6 +73,11 @@ final class RailHostingView: NSHostingView<AnyView> {
 final class EdgeRailController: ObservableObject {
     @Published private(set) var isExpanded = false
     @Published private(set) var isAdding = false
+    /// RailItem.id of the session whose title is being edited.
+    @Published private(set) var renamingID: String?
+    @Published var showArchive = false
+
+    private var isTextInputActive: Bool { isAdding || renamingID != nil }
 
     let store: Store
     private let panel = EdgePanel()
@@ -116,8 +121,9 @@ final class EdgeRailController: ObservableObject {
             .store(in: &cancellables)
         nc.publisher(for: NSWindow.didResignKeyNotification, object: panel)
             .sink { [weak self] _ in
-                guard let self, self.isAdding else { return }
-                self.endAdding(restoreFocus: false)
+                guard let self else { return }
+                if self.isAdding { self.endAdding(restoreFocus: false) }
+                if self.renamingID != nil { self.endRename(restoreFocus: false) }
             }
             .store(in: &cancellables)
     }
@@ -141,26 +147,49 @@ final class EdgeRailController: ObservableObject {
     private func scheduleCollapse() {
         collapseWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.isExpanded, !self.isAdding, !self.isMenuOpen, !self.isMouseInside else { return }
+            guard let self, self.isExpanded, !self.isTextInputActive, !self.isMenuOpen, !self.isMouseInside else { return }
             self.isExpanded = false
+            self.showArchive = false
         }
         collapseWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 
-    // MARK: Adding sessions
+    // MARK: Text input (adding, renaming)
 
     func beginAdding() {
-        let front = NSWorkspace.shared.frontmostApplication
-        previousApp = front == NSRunningApplication.current ? nil : front
-        collapseWork?.cancel()
-        isExpanded = true
+        renamingID = nil
+        startTextInput()
         isAdding = true
-        panel.makeKey()
     }
 
     func endAdding(restoreFocus: Bool = true) {
         isAdding = false
+        finishTextInput(restoreFocus: restoreFocus)
+    }
+
+    func beginRename(_ itemID: String) {
+        isAdding = false
+        startTextInput()
+        renamingID = itemID
+    }
+
+    func endRename(restoreFocus: Bool = true) {
+        renamingID = nil
+        finishTextInput(restoreFocus: restoreFocus)
+    }
+
+    private func startTextInput() {
+        if !isTextInputActive {
+            let front = NSWorkspace.shared.frontmostApplication
+            previousApp = front == NSRunningApplication.current ? nil : front
+        }
+        collapseWork?.cancel()
+        isExpanded = true
+        panel.makeKey()
+    }
+
+    private func finishTextInput(restoreFocus: Bool) {
         if restoreFocus {
             // Hand keyboard focus back to whatever app was in front before.
             panel.orderOut(nil)
