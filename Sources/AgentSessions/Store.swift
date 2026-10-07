@@ -93,7 +93,7 @@ final class Store: ObservableObject {
             )
             // Archived by the user counts only until the session shows new activity.
             let archivedByUser = state.archivedAt.map { $0 >= activity } ?? false
-            let inactive = now.timeIntervalSince(activity) > inactivityLimit
+            let inactive = d.autoArchives && now.timeIntervalSince(activity) > inactivityLimit
             if d.archived || archivedByUser || inactive {
                 archived.append(item)
             } else {

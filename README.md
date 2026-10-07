@@ -23,7 +23,7 @@ Alle 15 Sekunden liest die App (nur lesend) die lokalen Session-Daten der Assist
 | Claude Code (Terminal) | `~/.claude/projects/*/*.jsonl` mit `entrypoint: "cli"` | SDK- und Headless-Läufe |
 | Codex / ChatGPT Work | `~/.codex/state_*.sqlite`, Tabelle `threads` (`originator` unterscheidet beide) | Subagenten, Guardian-Reviews, Automationen |
 
-**Cowork in der Cloud:** Lokal stehen nur Session-ID und freigegebene Ordner, kein Titel und keine Aktivität. Eine Session gilt als gestartet, sobald ihre ID zum ersten Mal auftaucht, und heißt nach ihrem Ordner. Spätere Aktivität sieht die App nicht, deshalb archiviert sich der Eintrag 4 Stunden nach dem Start. Mit ⤴ im Archiv holst du ihn zurück. Wann welche ID zuerst gesehen wurde, steht in `~/Library/Application Support/AgentSessions/cowork-cloud-seen.json`.
+**Cowork in der Cloud:** Lokal stehen nur Session-ID und freigegebene Ordner, kein Titel und keine Aktivität. Eine Session gilt als gestartet, sobald ihre ID zum ersten Mal auftaucht, und heißt nach ihrem Ordner. Spätere Aktivität sieht die App nicht, deshalb archivieren sich diese Sessions nie automatisch – du archivierst sie selbst. Archiviert bleiben sie archiviert, bis du sie mit ⤴ zurückholst. Wann welche ID zuerst gesehen wurde, steht in `~/Library/Application Support/AgentSessions/cowork-cloud-seen.json`.
 
 Reine Chats in den Claude- und ChatGPT-Apps tauchen dort nicht auf und werden daher nicht erfasst.
 
@@ -34,7 +34,7 @@ Regeln:
 - **Löschen:** Die Session taucht nie wieder auf.
 - **Umbenennen:** Der eigene Titel gilt statt des Titels aus dem Assistenten. Ein leerer Titel stellt den Originaltitel wieder her.
 - Im Assistenten **archiviert** heißt in der App archiviert, im Assistenten **gelöscht** heißt in der App weg.
-- **Manuelle Sessions** werden nie automatisch archiviert.
+- **Manuelle Sessions** und **Cowork-Cloud-Sessions** werden nie automatisch archiviert.
 
 Die Formate dieser Dateien sind nicht offiziell dokumentiert. Ändert ein Assistent sein Format, fällt nur diese eine Quelle aus.
 

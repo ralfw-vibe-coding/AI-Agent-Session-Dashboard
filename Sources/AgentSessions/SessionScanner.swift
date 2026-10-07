@@ -61,7 +61,7 @@ final class SessionScanner: @unchecked Sendable {
         var found: [DetectedSession] = []
         found += scanClaudeDesktop(folder: "claude-code-sessions", source: "claude-desktop", assistant: "claude-code", cutoff: cutoff)
         found += scanClaudeDesktop(folder: "local-agent-mode-sessions", source: "claude-cowork", assistant: "claude-cowork", cutoff: cutoff)
-        found += scanCoworkCloud(cutoff: cutoff)
+        found += scanCoworkCloud()
         found += scanClaudeCLI(cutoff: cutoff)
         found += scanCodex(cutoff: cutoff)
         return found
@@ -105,9 +105,9 @@ final class SessionScanner: @unchecked Sendable {
 
     /// Cloud sessions are only listed locally with id and shared folders: no title,
     /// no timestamps, no archive state. A session counts as started when its id first
-    /// shows up; later activity is invisible, so it auto-archives after the usual
-    /// inactivity period from that moment.
-    private func scanCoworkCloud(cutoff: Date) -> [DetectedSession] {
+    /// shows up. Later activity is invisible, so these sessions never auto-archive;
+    /// the user archives them.
+    private func scanCoworkCloud() -> [DetectedSession] {
         let root = home.appendingPathComponent("Library/Application Support/Claude/local-agent-mode-sessions")
         let isFirstRun = loadCoworkSeen() == nil
         var seen = coworkSeen ?? [:]
@@ -146,7 +146,8 @@ final class SessionScanner: @unchecked Sendable {
         }
 
         return entries.compactMap { entry in
-            guard let firstSeen = seen[entry.id], firstSeen >= cutoff else { return nil }
+            // Sessions that already existed on the first run are ignored for good.
+            guard let firstSeen = seen[entry.id], firstSeen != .distantPast else { return nil }
             let names = entry.folders.map { URL(fileURLWithPath: $0).lastPathComponent }
             return DetectedSession(
                 key: "claude-cowork-cloud:\(entry.id)",
@@ -154,7 +155,8 @@ final class SessionScanner: @unchecked Sendable {
                 title: names.isEmpty ? "Cowork-Session" : names.joined(separator: " + "),
                 lastActivity: firstSeen,
                 archived: false,
-                detail: (entry.folders + ["Cloud-Session: nur der Start ist bekannt"]).joined(separator: "\n")
+                detail: (entry.folders + ["Cloud-Session: nur der Start ist bekannt, selbst archivieren"]).joined(separator: "\n"),
+                autoArchives: false
             )
         }
     }

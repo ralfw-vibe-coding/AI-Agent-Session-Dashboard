@@ -139,6 +139,8 @@ struct DetectedSession: Hashable {
     let archived: Bool
     /// Working folder, shown in the tooltip.
     let detail: String?
+    /// false: stays active until the user archives it, regardless of inactivity.
+    var autoArchives = true
 }
 
 /// One line in the rail: a manual or a detected session, ready to display.
