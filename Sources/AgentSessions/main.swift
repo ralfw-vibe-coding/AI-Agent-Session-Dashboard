@@ -4,12 +4,17 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: Store!
     private var rail: EdgeRailController!
+    private var power: PowerMonitor!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = makeMainMenu()
         store = Store()
         rail = EdgeRailController(store: store)
         rail.show()
+
+        power = PowerMonitor()
+        power.onChange = { [weak self] paused in self?.store.setPaused(paused) }
+        store.setPaused(power.isPaused)
     }
 
     /// Never visible (accessory app), but required so ⌘C/⌘V/⌘A/⌘Z work in text fields.

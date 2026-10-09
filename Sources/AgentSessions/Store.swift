@@ -24,6 +24,8 @@ final class Store: ObservableObject {
     private var isReloading = false
     private var lastSeenModDate: Date?
     private var pollTimer: Timer?
+    /// No polling or scanning while the Mac sleeps, the screens are off, the screen is locked or the lid is closed.
+    private var isPaused = false
 
     init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -48,14 +50,33 @@ final class Store: ObservableObject {
         }
         lastSeenModDate = modificationDate()
 
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reloadIfChanged() }
+        startPolling()
+        updateScanner()
+    }
+
+    func setPaused(_ paused: Bool) {
+        guard paused != isPaused else { return }
+        isPaused = paused
+        if paused {
+            pollTimer?.invalidate()
+            pollTimer = nil
+        } else {
+            reloadIfChanged()
+            startPolling()
         }
         updateScanner()
     }
 
+    private func startPolling() {
+        guard pollTimer == nil else { return }
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reloadIfChanged() }
+        }
+        pollTimer?.tolerance = 1
+    }
+
     private func updateScanner() {
-        if data.autoDetect {
+        if data.autoDetect && !isPaused {
             if scanner == nil {
                 scanner = SessionScanner { [weak self] found in self?.detected = found }
             }

@@ -100,6 +100,8 @@ Alle 15 Sekunden liest die App die Session-Daten, die die Assistenten ohnehin lo
 
 Die App greift nicht aufs Netz zu. Sie liest nur lokale Dateien.
 
+Sie hält den Mac nie wach: Sie setzt keine Energie-Sperre. Solange der Mac schläft, die Bildschirme aus sind, der Bildschirm gesperrt oder der Deckel zu ist, pausiert sie alle Timer. Danach liest sie sofort neu ein.
+
 Gespeichert wird in `~/Library/Application Support/AgentSessions/`:
 
 | Datei | Inhalt |
@@ -154,6 +156,7 @@ Auch ohne Xcode-Projekt lässt sich das Paket in Xcode öffnen: `open Package.sw
 
 | Datei (`Sources/AgentSessions/`) | Inhalt |
 |---|---|
+| `PowerMonitor.swift` | Erkennt Ruhezustand, Bildschirm aus, Sperre und geschlossenen Deckel, damit die App pausiert |
 | `main.swift` | App-Start als Hintergrund-App ohne Dock-Icon, Edit-Menü für ⌘C/⌘V/⌘A, Diagnose-Schalter `--scan` |
 | `Models.swift` | Datentypen: Assistant, manuelle Session, erkannte Session, Listeneintrag (`RailItem`), Rand und Position, Farb-Helfer |
 | `Store.swift` | Lädt und speichert `sessions.json`, führt manuelle und erkannte Sessions zusammen, setzt die Archiv-Regeln um |

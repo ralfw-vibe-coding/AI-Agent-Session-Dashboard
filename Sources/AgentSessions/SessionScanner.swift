@@ -40,6 +40,8 @@ final class SessionScanner: @unchecked Sendable {
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.scan()
         }
+        // Lets macOS coalesce wake-ups with other timers.
+        timer?.tolerance = interval / 3
     }
 
     func stop() {
